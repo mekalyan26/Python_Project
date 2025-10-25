@@ -12,15 +12,20 @@ const summarizeBtn = document.getElementById("summarizeBtn");
 
 function addMessage(sender, text) {
   const bubble = document.createElement("div");
-  bubble.classList.add(
+  const classes = [
     "p-2",
     "my-2",
     "rounded-lg",
-    "max-w-[80%]",
-    sender === "user"
-      ? "bg-blue-500 text-white self-end ml-auto"
-      : "bg-gray-200 text-gray-800"
-  );
+    "max-w-[80%]"
+  ];
+  
+  if (sender === "user") {
+    classes.push("bg-blue-500", "text-white", "self-end", "ml-auto");
+  } else {
+    classes.push("bg-gray-200", "text-gray-800");
+  }
+  
+  classes.forEach(cls => bubble.classList.add(cls));
   bubble.innerText = text;
   chatBox.appendChild(bubble);
   chatBox.scrollTop = chatBox.scrollHeight;
@@ -45,45 +50,50 @@ uploadBtn.addEventListener("click", async () => {
       body: formData,
     });
     const data = await res.json();
-    if (data.ok) {
-      uploadStatus.textContent = `✅ Indexed ${data.chunks} chunks successfully.`;
-    } else {
-      uploadStatus.textContent = `❌ Error: ${data.message}`;
-    }
+    uploadStatus.textContent = data.message;
   } catch (err) {
-    console.error(err);
-    uploadStatus.textContent = "❌ Upload failed.";
+    console.error("Upload failed:", err);
+    uploadStatus.textContent = "Upload failed: " + err.message;
   }
 });
 
 askBtn.addEventListener("click", async () => {
   const question = questionInput.value.trim();
-  if (!question) return;
+  if (!question) return;  // Add return statement here
 
   addMessage("user", question);
   questionInput.value = "";
 
-  const res = await fetch(`${API_BASE}/ask`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question }),
-  });
+  try {
+    const res = await fetch(`${API_BASE}/ask`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question }),
+    });
 
-  const data = await res.json();
-  if (data.ok) {
-    addMessage("bot", data.answer);
-  } else {
-    addMessage("bot", `⚠️ ${data.message}`);
+    const data = await res.json();
+    if (data.ok) {
+      addMessage("bot", data.answer);
+    } else {
+      addMessage("bot", `⚠️ ${data.message}`);
+    }
+  } catch (err) {
+    console.error("Request failed:", err);
+    addMessage("bot", `❌ Error: ${err.message}`);
   }
 });
 
 summarizeBtn.addEventListener("click", async () => {
   addMessage("user", "Summarize this document.");
-  const res = await fetch(`${API_BASE}/summarize`);
-  const data = await res.json();
-  if (data.ok) {
-    addMessage("bot", data.summary);
-  } else {
-    addMessage("bot", `⚠️ ${data.message}`);
+  try {
+    const res = await fetch(`${API_BASE}/summarize`);
+    const data = await res.json();
+    if (data.ok) {
+      addMessage("bot", data.summary);
+    } else {
+      addMessage("bot", `⚠️ ${data.message}`);
+    }
+  } catch (err) {
+    addMessage("bot", `❌ Error: ${err.message}`);
   }
 });
