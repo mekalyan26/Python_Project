@@ -23,6 +23,7 @@ rag = RAGEngine()  # single-engine in-memory state
 
 class AskRequest(BaseModel):
     question: str
+    reference_answer: Optional[str] = None
     top_k: Optional[int] = 4
     max_new_tokens: Optional[int] = 512
 
@@ -60,9 +61,14 @@ async def upload_pdf(file: UploadFile = File(...), chunk_size: int = Form(900), 
 
 @app.post("/ask")
 def ask(req: AskRequest):
-    if rag.index is None:
-        return {"ok": False, "message": "No document indexed. Upload a PDF first."}
-    result = rag.answer(req.question, top_k=req.top_k or 4, max_new_tokens=req.max_new_tokens or 512)
+    if rag is None:
+        return {"ok": False, "message": "RAG engine not initialized"}
+    result = rag.answer(
+        req.question,
+        reference_answer=req.reference_answer,
+        top_k=req.top_k or 4,
+        max_new_tokens=req.max_new_tokens or 512,
+    )
     return {"ok": True, **result}
 
 @app.get("/summarize")
