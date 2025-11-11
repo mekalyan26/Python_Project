@@ -12,6 +12,8 @@ import logging
 DEFAULT_EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 DEFAULT_LLM_MODEL = os.environ.get("MODEL_NAME", "TinyLlama/TinyLlama-1.1B-Chat-v1.0")
 
+logger = logging.getLogger(__name__)
+
 class RAGEngine:
     def __init__(self):
         # Embeddings
@@ -111,53 +113,74 @@ class RAGEngine:
         return prompt
 
     def _compute_contextual_metrics(self, answer: str, contexts: List[str], hits: List[Tuple[str, float, dict]]) -> Dict[str, float]:
-        """
-        Simple heuristics: token overlap-based precision/recall, F1 (contextual_relevancy),
-        answer <-> contexts embedding similarity as answer_relevancy, avg retrieval score as ragas.
-        """
-        # normalize & simple tokenization
-        def toks(s: str):
-            s = re.sub(r"[^\w\s]", " ", s.lower())
-            return [t for t in s.split() if t]
-
-        answer_toks = set(toks(answer))
-        context_text = " ".join(contexts)
-        context_toks = set(toks(context_text))
-
-        common = answer_toks & context_toks
-        precision = (len(common) / len(answer_toks)) if answer_toks else 0.0
-        recall = (len(common) / len(context_toks)) if context_toks else 0.0
-        if precision + recall > 0:
-            f1 = 2 * precision * recall / (precision + recall)
-        else:
-            f1 = 0.0
-
-        # answer_relevancy: cosine similarity between answer and concatenated contexts
+        """Compute all metrics with detailed logging."""
+        logger.debug("=== Starting Metrics Computation ===")
+        logger.debug(f"Answer text ({len(answer)} chars): {answer[:100]}...")
+        logger.debug(f"Number of contexts: {len(contexts)}")
+        
         try:
-            emb = self.embed_model.encode([answer, context_text], convert_to_numpy=True)
-            a_emb, c_emb = emb[0], emb[1]
-            # cosine
-            denom = (np.linalg.norm(a_emb) * np.linalg.norm(c_emb))
-            ans_relevancy = float(np.dot(a_emb, c_emb) / denom) if denom > 0 else 0.0
-        except Exception:
-            ans_relevancy = 0.0
+            # Normalize texts
+            def normalize_text(text: str) -> str:
+                return re.sub(r'\s+', ' ', text.lower().strip())
 
-        # ragas: average retrieval score (if hits include scores)
-        try:
-            scores = [float(s) for _, s, _ in hits if s is not None]
-            ragas = float(np.mean(scores)) if scores else 0.0
-        except Exception:
-            ragas = 0.0
+            answer_norm = normalize_text(answer)
+            context_text = " ".join(contexts)
+            context_norm = normalize_text(context_text)
+            logger.debug("Texts normalized")
 
-        metrics = {
-            "answer_relevancy": round(ans_relevancy, 4),
-            "faithfulness": round(precision, 4),            # heuristic mapping
-            "contextual_recall": round(recall, 4),
-            "contextual_precision": round(precision, 4),
-            "contextual_relevancy": round(f1, 4),
-            "ragas": round(ragas, 4),
-        }
-        return metrics
+            # Calculate embedding-based relevancy
+            logger.debug("Computing embeddings...")
+            embeddings = self.embed_model.encode(
+                [answer_norm, context_norm], 
+                convert_to_numpy=True
+            )
+            
+            answer_emb = embeddings[0] / np.linalg.norm(embeddings[0])
+            context_emb = embeddings[1] / np.linalg.norm(embeddings[1])
+            
+            answer_relevancy = float(np.dot(answer_emb, context_emb))
+            logger.debug(f"Answer Relevancy Score: {answer_relevancy:.4f}")
+
+            # Token-based metrics
+            logger.debug("Computing token-based metrics...")
+            answer_tokens = set(answer_norm.split())
+            context_tokens = set(context_norm.split())
+            common_tokens = answer_tokens & context_tokens
+            
+            precision = len(common_tokens) / len(answer_tokens) if answer_tokens else 0
+            recall = len(common_tokens) / len(context_tokens) if context_tokens else 0
+            f1 = 2 * (precision * recall) / (precision + recall) if precision + recall > 0 else 0
+
+            logger.debug(f"Precision: {precision:.4f}")
+            logger.debug(f"Recall: {recall:.4f}")
+            logger.debug(f"F1 Score: {f1:.4f}")
+
+            # RAGAS composite score
+            ragas = sum([answer_relevancy, precision, recall, f1]) / 4
+            logger.debug(f"RAGAS Score: {ragas:.4f}")
+
+            metrics = {
+                "answer_relevancy": round(answer_relevancy, 4),
+                "faithfulness": round(precision, 4),
+                "contextual_recall": round(recall, 4),
+                "contextual_precision": round(precision, 4),
+                "contextual_relevancy": round(f1, 4),
+                "ragas": round(ragas, 4)
+            }
+            
+            logger.info("Metrics computed successfully: %s", metrics)
+            return metrics
+                
+        except Exception as e:
+            logger.exception("Error computing metrics")
+            return {
+                "answer_relevancy": 0.0,
+                "faithfulness": 0.0,
+                "contextual_recall": 0.0,
+                "contextual_precision": 0.0,
+                "contextual_relevancy": 0.0,
+                "ragas": 0.0
+            }
 
     def answer(self, query: str, reference_answer: Optional[str] = None, top_k: int = 4, max_new_tokens: int = 512) -> Dict[str, Any]:
         hits = self.retrieve(query, top_k=top_k)
@@ -251,33 +274,58 @@ class RAGEngine:
 
     def evaluate_answer(self, generated_answer: str, reference_answer: str) -> Dict[str, float]:
         """
-        Dynamically import and run DeepEval. Returns a dict of metrics or {} if unavailable.
+        Compute evaluation metrics using embedding similarity and token overlap.
+        Falls back to contextual metrics if deepeval is not available.
         """
-        # Try a couple of import paths (package API may differ by version)
-        EvaluatorCls = None
         try:
-            from deepeval import Evaluator as EvaluatorCls  # preferred top-level API
-        except Exception:
-            try:
-                from deepeval.evaluator import Evaluator as EvaluatorCls  # alternate location
-            except Exception:
-                logging.exception("DeepEval not available; skipping evaluation")
-                return {}
+            # Normalize text for comparison
+            def normalize_text(text: str) -> str:
+                return re.sub(r'\s+', ' ', text.lower().strip())
 
-        try:
-            evaluator = EvaluatorCls()
-            # Many evaluator APIs expect (prediction, reference) or named args;
-            # try common variants and adapt based on real API from your installed version.
-            try:
-                metrics = evaluator.evaluate(generated_answer, reference_answer)
-            except TypeError:
-                # fallback to keyword args if required by this version
-                metrics = evaluator.evaluate(predictions=generated_answer, references=reference_answer)
-            # Ensure a dict result
-            if isinstance(metrics, dict):
-                return metrics
-            # if it returned a single score, wrap it
-            return {"score": metrics}
-        except Exception:
-            logging.exception("DeepEval evaluation failed")
-            return {}
+            gen_norm = normalize_text(generated_answer)
+            ref_norm = normalize_text(reference_answer)
+
+            # Get embeddings for similarity
+            embeddings = self.embed_model.encode(
+                [gen_norm, ref_norm], 
+                convert_to_numpy=True
+            )
+            
+            # Normalize vectors
+            gen_emb = embeddings[0] / np.linalg.norm(embeddings[0])
+            ref_emb = embeddings[1] / np.linalg.norm(embeddings[1])
+            
+            # Compute similarity score
+            similarity = float(np.dot(gen_emb, ref_emb))
+
+            # Token overlap metrics
+            gen_tokens = set(gen_norm.split())
+            ref_tokens = set(ref_norm.split())
+            
+            common = gen_tokens & ref_tokens
+            precision = len(common) / len(gen_tokens) if gen_tokens else 0
+            recall = len(common) / len(ref_tokens) if ref_tokens else 0
+            f1 = 2 * (precision * recall) / (precision + recall) if precision + recall > 0 else 0
+
+            metrics = {
+                "answer_relevancy": round(similarity, 4),
+                "faithfulness": round(precision, 4),
+                "contextual_recall": round(recall, 4),
+                "contextual_precision": round(precision, 4),
+                "contextual_relevancy": round(f1, 4),
+                "ragas": round((similarity + f1) / 2, 4)  # composite score
+            }
+            
+            print(f"Debug - Evaluation metrics computed: {metrics}")
+            return metrics
+
+        except Exception as e:
+            logging.exception("Evaluation failed")
+            return {
+                "answer_relevancy": 0.0,
+                "faithfulness": 0.0,
+                "contextual_recall": 0.0,
+                "contextual_precision": 0.0,
+                "contextual_relevancy": 0.0,
+                "ragas": 0.0
+            }

@@ -1,5 +1,6 @@
 import os
 import tempfile
+import logging
 from typing import Optional
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,6 +8,13 @@ from pydantic import BaseModel
 
 from pdf_utils import extract_text_from_pdf, chunk_text
 from rag_pipeline import RAGEngine
+
+# Configure logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Local RAG Backend", version="0.1.0")
 
@@ -63,12 +71,15 @@ async def upload_pdf(file: UploadFile = File(...), chunk_size: int = Form(900), 
 def ask(req: AskRequest):
     if rag is None:
         return {"ok": False, "message": "RAG engine not initialized"}
+    
+    logger.debug(f"Processing question: {req.question[:100]}...")
     result = rag.answer(
         req.question,
         reference_answer=req.reference_answer,
         top_k=req.top_k or 4,
         max_new_tokens=req.max_new_tokens or 512,
     )
+    logger.debug(f"Metrics computed: {result.get('metrics', {})}")
     return {"ok": True, **result}
 
 @app.get("/summarize")

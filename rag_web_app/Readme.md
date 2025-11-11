@@ -13,10 +13,10 @@ http://localhost:8000/health
 
  python -m http.server 5173 --bind 127.0.0.1
 
- # model = AutoModelForCausalLM.from_pretrained("TinyLlama/TinyLlama-1.1B-Chat-v1.0")
+ ### model = AutoModelForCausalLM.from_pretrained("TinyLlama/TinyLlama-1.1B-Chat-v1.0")
 
-# 1. Downloads/loads config.json
-# 2. Sees it's a LlamaConfig
-# 3. Uses LlamaForCausalLM class
-# 4. Downloads/loads model weights
-# 5. Returns initialized LlamaForCausalLM instance
+#### 1. Downloads/loads config.json
+#### 2. Sees it's a LlamaConfig
+#### 3. Uses LlamaForCausalLM class
+#### 4. Downloads/loads model weights
+#### 5. Returns initialized LlamaForCausalLM instance
