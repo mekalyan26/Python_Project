@@ -3,80 +3,448 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Local RAG App</title>
+  <title>RAG-Eval-App</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="styles.css">
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --retro-bg:#f6f1e1;
+      --retro-ink:#1b1b1b;
+      --retro-primary:#00c2a8;
+      --retro-accent:#ff6f61;
+      --retro-yellow:#ffd166;
+      --retro-purple:#7c3aed;
+      --retro-shadow:#2b2b2b;
+    }
+    body{ background-color: var(--retro-bg); color: var(--retro-ink); }
+    .retro-card{
+      background:#fffef8; border:3px solid var(--retro-ink);
+      box-shadow: 6px 6px 0 var(--retro-shadow);
+      border-radius: 10px;
+    }
+    .retro-input{
+      border:3px solid var(--retro-ink)!important; border-radius:10px!important;
+      padding:10px 12px!important; background:#fffef8!important; font-family:"VT323", monospace!important;
+      box-shadow: inset 0 0 0 3px var(--retro-yellow); outline:none;
+    }
+    .retro-input:focus{ box-shadow: inset 0 0 0 3px var(--retro-primary); }
+    .retro-btn{
+      font-family:"Press Start 2P", system-ui; letter-spacing:.5px;
+      border:3px solid var(--retro-ink); border-radius:10px;
+      background: linear-gradient(180deg, var(--retro-primary), #139a89);
+      color:#fff; padding:10px 14px; box-shadow:6px 6px 0 var(--retro-shadow); transition: transform .05s;
+    }
+    .retro-btn--accent{ background: linear-gradient(180deg, var(--retro-accent), #e65049); }
+    .retro-btn:hover{ filter: saturate(120%); }
+    .retro-btn:active{ transform: translate(3px,3px); box-shadow:3px 3px 0 var(--retro-shadow); }
+
+    /* Custom file picker */
+    .retro-file{ position:relative; }
+    .retro-file input[type="file"]{ position:absolute; inset:0; opacity:0; cursor:pointer; }
+    .retro-file .retro-file-visible{
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      border:3px dashed var(--retro-ink); border-radius:12px; padding:12px; background:#fffef8;
+      font-family:"VT323", monospace;
+    }
+    .retro-file .retro-file-name{ color:#444; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .retro-kicker{ font-family:"Press Start 2P", system-ui; font-size:10px; color:#4b5563; }
+
+    /* Background image styling */
+    body {
+      background-image: url('assets/my-background.png');
+      background-size: cover;
+      background-position: center;
+      background-attachment: fixed;
+      background-repeat: no-repeat;
+    }
+    
+    /* Optional: Add overlay for better readability */
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(243, 244, 246, 0.85); /* Light gray overlay with transparency */
+      z-index: -1;
+    }
+
+    /* Tooltip styles */
+    .tooltip {
+      visibility: hidden;
+      opacity: 0;
+      transition: opacity 0.3s, visibility 0.3s;
+    }
+    .tooltip-trigger:hover .tooltip {
+      visibility: visible;
+      opacity: 1;
+    }
+    /* Arrow for tooltip */
+    .tooltip::after {
+      content: '';
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      margin-left: -5px;
+      border-width: 5px;
+      border-style: solid;
+      border-color: #1f2937 transparent transparent transparent;
+    }
+
+    /* Metric name styling */
+    .metric-name {
+      font-weight: 600;
+      font-size: 0.875rem;
+      letter-spacing: 0.025em;
+      text-transform: uppercase;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .metric-name-blue {
+      background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .metric-name-green {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .metric-name-purple {
+      background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .metric-name-indigo {
+      background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .metric-name-yellow {
+      background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .metric-name-red {
+      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    /* Metric card hover effect */
+    .metric-card {
+      transition: all 0.3s ease;
+      border-left: 3px solid transparent;
+    }
+
+    .metric-card:hover {
+      transform: translateX(4px);
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    }
+
+    .metric-card-blue:hover {
+      border-left-color: #3b82f6;
+    }
+
+    .metric-card-green:hover {
+      border-left-color: #10b981;
+    }
+
+    .metric-card-purple:hover {
+      border-left-color: #a855f7;
+    }
+
+    .metric-card-indigo:hover {
+      border-left-color: #6366f1;
+    }
+
+    .metric-card-yellow:hover {
+      border-left-color: #f59e0b;
+    }
+
+    .metric-card-red:hover {
+      border-left-color: #ef4444;
+    }
+  </style>
 </head>
 
-<body class="bg-gray-100 flex flex-col items-center min-h-screen">
-    <div class="w-full px-4 mt-8 grid grid-cols-1 lg:grid-cols-3 gap-4 max-w-7xl">
-        <!-- Main Content -->
-        <div class="lg:col-span-2 bg-white rounded-2xl shadow-lg p-6">
-            <h1 class="text-2xl font-bold mb-4 text-center">📄 Local RAG Chatbot</h1>
+<body class="flex flex-col items-center min-h-screen">
+  <!-- Header with two tabs -->
+  <header class="w-full bg-white shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="text-xl font-semibold">RAG-Eval-App</div>
+      <nav class="flex space-x-2">
+        <a id="tabApp" href="index.html" class="px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700">App</a>
+        <a id="tabData" href="data.html" class="px-4 py-2 rounded-md bg-transparent text-gray-700 hover:bg-gray-100">Data</a>
+      </nav>
+    </div>
+  </header>
 
-            <!-- File Upload -->
-            <div class="mb-4 flex flex-col items-center">
-                <input id="pdfFile" type="file" accept=".pdf" class="mb-2" />
-                <button id="uploadBtn" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Upload & Index</button>
-                <p id="uploadStatus" class="text-sm mt-2 text-gray-700"></p>
-            </div>
+  <div class="w-full px-4 mt-8 max-w-7xl mx-auto">
+    <!-- Main grid with chat and metrics -->
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
+      <!-- Chat Section (Left) - Takes 2 columns -->
+      <div class="lg:col-span-2 bg-white rounded-2xl shadow-lg p-6">
+        <h1 class="text-2xl font-bold mb-4 text-center">📄RAG Chatbot</h1>
 
-            <!-- Chat Box -->
-            <div id="chatBox" class="h-80 overflow-y-auto border border-gray-300 rounded p-4 bg-gray-50 mb-4"></div>
-
-            <!-- Input -->
-            <div class="mt-4 space-y-2">
-                <div class="flex items-center">
-                    <input id="questionInput" type="text" placeholder="Ask something about the document..."
-                        class="flex-1 border border-gray-300 rounded-l px-3 py-2 focus:outline-none" />
-                    <button id="askBtn" class="bg-green-600 text-white px-4 py-2 rounded-r hover:bg-green-700">Ask</button>
-                </div>
-
-                <!-- Optional reference answer (for eval) -->
-                <div class="flex items-center">
-                    <input id="referenceInput" type="text" placeholder="Optional: reference answer for evaluation"
-                        class="flex-1 border border-gray-300 rounded px-3 py-2 focus:outline-none" />
-                </div>
-            </div>
-
-            <!-- Summarize -->
-            <div class="mt-4 text-center">
-                <button id="summarizeBtn" class="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700">Summarize Document</button>
-            </div>
+        <!-- File Upload -->
+        <div class="mb-4 flex flex-col items-center">
+          <input id="pdfFile" type="file" accept=".pdf" class="mb-2" />
+          <button id="uploadBtn" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Upload &amp; Index</button>
+          <p id="uploadStatus" class="text-sm mt-2 text-gray-700"></p>
         </div>
 
-        <!-- Metrics Panel (Right Side) -->
-        <div id="metricsPanel" class="bg-white rounded-2xl shadow-lg p-6">
-            <h2 class="text-lg font-bold mb-4">Evaluation Metrics</h2>
-            <div class="space-y-3">
-                <div class="p-3 bg-gray-50 rounded">
-                    <div class="font-medium">Answer Relevancy</div>
-                    <div id="m_answer_relevancy" class="text-2xl font-bold text-blue-600">0.0000</div>
-                </div>
-                <div class="p-3 bg-gray-50 rounded">
-                    <div class="font-medium">Faithfulness</div>
-                    <div id="m_faithfulness" class="text-2xl font-bold text-green-600">0.0000</div>
-                </div>
-                <div class="p-3 bg-gray-50 rounded">
-                    <div class="font-medium">Contextual Recall</div>
-                    <div id="m_contextual_recall" class="text-2xl font-bold text-purple-600">0.0000</div>
-                </div>
-                <div class="p-3 bg-gray-50 rounded">
-                    <div class="font-medium">Contextual Precision</div>
-                    <div id="m_contextual_precision" class="text-2xl font-bold text-indigo-600">0.0000</div>
-                </div>
-                <div class="p-3 bg-gray-50 rounded">
-                    <div class="font-medium">Contextual Relevancy</div>
-                    <div id="m_contextual_relevancy" class="text-2xl font-bold text-yellow-600">0.0000</div>
-                </div>
-                <div class="p-3 bg-gray-50 rounded">
-                    <div class="font-medium">RAGAS</div>
-                    <div id="m_ragas" class="text-2xl font-bold text-red-600">0.0000</div>
-                </div>
-            </div>
+        <!-- Chat Box -->
+        <div id="chatBox" class="h-80 overflow-y-auto border border-gray-300 rounded p-4 bg-gray-50 mb-4"></div>
+
+        <!-- Input -->
+        <div class="mt-4 space-y-2">
+          <div class="flex items-center">
+            <input id="questionInput" type="text" placeholder="Ask something about the document..."
+              class="flex-1 border border-gray-300 rounded-l px-3 py-2 focus:outline-none" />
+            <button id="askBtn" class="bg-green-600 text-white px-4 py-2 rounded-r hover:bg-green-700">Ask</button>
+          </div>
+
+          <!-- Optional reference answer (for eval) -->
+          <div class="flex items-center">
+            <input id="referenceInput" type="text" placeholder="Optional: reference answer for evaluation"
+              class="flex-1 border border-gray-300 rounded px-3 py-2 focus:outline-none" />
+          </div>
         </div>
+
+        <!-- New: Reference Answer File (optional) -->
+        <div class="mt-3 space-y-2">
+          <label class="retro-kicker block">Upload Reference Answer (optional)</label>
+          <div class="retro-file">
+            <div class="retro-file-visible">
+              <span id="referenceFileName" class="retro-file-name">Choose .txt / .md / .json</span>
+              <button type="button" class="retro-btn retro-btn--accent text-xs">Browse</button>
+            </div>
+            <input id="referenceFile" type="file" accept=".txt,.md,.json" aria-label="Upload reference answer file">
+          </div>
+          <p class="text-xs text-gray-600">Tip: Selected file content will auto-fill the Reference Answer field above.</p>
+        </div>
+
+        <!-- Summarize -->
+        <div class="mt-4 text-center">
+          <button id="summarizeBtn" class="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700">Summarize Document</button>
+        </div>
+      </div>
+
+      <!-- DeepEval Metrics Panel (Middle column) -->
+      <div id="deepevalMetricsPanel" class="bg-white rounded-2xl shadow-lg p-6">
+        <h2 class="text-lg font-bold mb-4 text-purple-600">🚀 DeepEval Metrics</h2>
+        <div class="space-y-3">
+          <!-- Answer Relevancy -->
+          <div class="p-3 bg-gray-50 rounded tooltip-trigger relative metric-card metric-card-blue">
+            <div class="flex items-center justify-between gap-1 mb-1">
+              <span class="metric-name metric-name-blue">📊 Answer Relevancy</span>
+              <span class="text-gray-400 cursor-help text-xs">ℹ️</span>
+            </div>
+            <div id="d_answer_relevancy" class="text-2xl font-bold text-blue-600">0.0000</div>
+            <!-- Tooltip -->
+            <div class="tooltip absolute bg-gray-800 text-white text-xs rounded py-2 px-3 bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 z-50 shadow-lg">
+              <div class="font-semibold mb-1">Answer Relevancy</div>
+              <p>Measures how relevant the generated answer is to the input question. Uses LLM to generate multiple variations of the question based on the answer, then computes similarity.</p>
+              <div class="text-gray-300 mt-1">Range: 0.0 - 1.0 (higher is better)</div>
+            </div>
+          </div>
+
+          <!-- Faithfulness -->
+          <div class="p-3 bg-gray-50 rounded tooltip-trigger relative metric-card metric-card-green">
+            <div class="flex items-center justify-between gap-1 mb-1">
+              <span class="metric-name metric-name-green">✅ Faithfulness</span>
+              <span class="text-gray-400 cursor-help text-xs">ℹ️</span>
+            </div>
+            <div id="d_faithfulness" class="text-2xl font-bold text-green-600">0.0000</div>
+            <!-- Tooltip -->
+            <div class="tooltip absolute bg-gray-800 text-white text-xs rounded py-2 px-3 bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 z-50 shadow-lg">
+              <div class="font-semibold mb-1">Faithfulness</div>
+              <p>Evaluates whether the answer is factually consistent with the retrieval context. Checks if claims in the answer are supported by the retrieved documents.</p>
+              <div class="text-gray-300 mt-1">Range: 0.0 - 1.0 (higher is better)</div>
+            </div>
+          </div>
+
+          <!-- Contextual Recall -->
+          <div class="p-3 bg-gray-50 rounded tooltip-trigger relative metric-card metric-card-purple">
+            <div class="flex items-center justify-between gap-1 mb-1">
+              <span class="metric-name metric-name-purple">🎯 Contextual Recall</span>
+              <span class="text-gray-400 cursor-help text-xs">ℹ️</span>
+            </div>
+            <div id="d_contextual_recall" class="text-2xl font-bold text-purple-600">0.0000</div>
+            <!-- Tooltip -->
+            <div class="tooltip absolute bg-gray-800 text-white text-xs rounded py-2 px-3 bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 z-50 shadow-lg">
+              <div class="font-semibold mb-1">Contextual Recall</div>
+              <p>Measures how much of the expected answer (ground truth) can be attributed to the retrieved context. Evaluates retrieval quality.</p>
+              <div class="text-gray-300 mt-1">Range: 0.0 - 1.0 (higher is better)</div>
+              <div class="text-yellow-300 mt-1">⚠️ Requires ground truth answer</div>
+            </div>
+          </div>
+
+          <!-- Contextual Precision -->
+          <div class="p-3 bg-gray-50 rounded tooltip-trigger relative metric-card metric-card-indigo">
+            <div class="flex items-center justify-between gap-1 mb-1">
+              <span class="metric-name metric-name-indigo">🔍 Contextual Precision</span>
+              <span class="text-gray-400 cursor-help text-xs">ℹ️</span>
+            </div>
+            <div id="d_contextual_precision" class="text-2xl font-bold text-indigo-600">0.0000</div>
+            <!-- Tooltip -->
+            <div class="tooltip absolute bg-gray-800 text-white text-xs rounded py-2 px-3 bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 z-50 shadow-lg">
+              <div class="font-semibold mb-1">Contextual Precision</div>
+              <p>Evaluates whether relevant context appears higher in the ranked retrieval results. Measures if the retriever prioritizes relevant documents.</p>
+              <div class="text-gray-300 mt-1">Range: 0.0 - 1.0 (higher is better)</div>
+              <div class="text-yellow-300 mt-1">⚠️ Requires ground truth answer</div>
+            </div>
+          </div>
+
+          <!-- RAGAS Score -->
+          <div class="p-3 bg-gray-50 rounded tooltip-trigger relative metric-card metric-card-red">
+            <div class="flex items-center justify-between gap-1 mb-1">
+              <span class="metric-name metric-name-red">⭐ RAGAS Score</span>
+              <span class="text-gray-400 cursor-help text-xs">ℹ️</span>
+            </div>
+            <div id="d_ragas" class="text-2xl font-bold text-red-600">0.0000</div>
+            <!-- Tooltip -->
+            <div class="tooltip absolute bg-gray-800 text-white text-xs rounded py-2 px-3 bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 z-50 shadow-lg">
+              <div class="font-semibold mb-1">RAGAS Score</div>
+              <p>Composite RAG Assessment Score - the average of all individual metrics. Provides an overall quality measure of the RAG system.</p>
+              <div class="text-gray-300 mt-1">Range: 0.0 - 1.0 (higher is better)</div>
+              <div class="text-blue-300 mt-1">📊 Combines: Answer Relevancy, Faithfulness, Contextual Recall, Contextual Precision</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Fallback Metrics Panel (Right column) -->
+      <div id="metricsPanel" class="bg-white rounded-2xl shadow-lg p-6">
+        <h2 class="text-lg font-bold mb-4 text-blue-600">📊 Fallback Metrics</h2>
+        <div class="space-y-3">
+          <div class="p-3 bg-gray-50 rounded metric-card metric-card-blue">
+            <div class="metric-name metric-name-blue mb-1">📊 Answer Relevancy</div>
+            <div id="m_answer_relevancy" class="text-2xl font-bold text-blue-600">0.0000</div>
+          </div>
+          <div class="p-3 bg-gray-50 rounded metric-card metric-card-green">
+            <div class="metric-name metric-name-green mb-1">✅ Faithfulness</div>
+            <div id="m_faithfulness" class="text-2xl font-bold text-green-600">0.0000</div>
+          </div>
+          <div class="p-3 bg-gray-50 rounded metric-card metric-card-purple">
+            <div class="metric-name metric-name-purple mb-1">🎯 Contextual Recall</div>
+            <div id="m_contextual_recall" class="text-2xl font-bold text-purple-600">0.0000</div>
+          </div>
+          <div class="p-3 bg-gray-50 rounded metric-card metric-card-indigo">
+            <div class="metric-name metric-name-indigo mb-1">🔍 Contextual Precision</div>
+            <div id="m_contextual_precision" class="text-2xl font-bold text-indigo-600">0.0000</div>
+          </div>
+          <div class="p-3 bg-gray-50 rounded metric-card metric-card-yellow">
+            <div class="metric-name metric-name-yellow mb-1">💡 Contextual Relevancy</div>
+            <div id="m_contextual_relevancy" class="text-2xl font-bold text-yellow-600">0.0000</div>
+          </div>
+          <div class="p-3 bg-gray-50 rounded metric-card metric-card-red">
+            <div class="metric-name metric-name-red mb-1">⭐ RAGAS</div>
+            <div id="m_ragas" class="text-2xl font-bold text-red-600">0.0000</div>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <script src="app.js"></script>
+    <!-- Summarization Metrics Panel (Full width below) -->
+    <div id="summarizationMetricsPanel" class="bg-white rounded-2xl shadow-lg p-6 mb-6" style="display: none;">
+      <h2 class="text-lg font-bold mb-4 text-orange-600">📝 Summarization Metrics</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+        <!-- Summarization Score -->
+        <div class="p-3 bg-gray-50 rounded tooltip-trigger relative metric-card metric-card-blue">
+          <div class="flex items-center justify-between gap-1 mb-1">
+            <span class="metric-name metric-name-blue">📊 Summarization</span>
+            <span class="text-gray-400 cursor-help text-xs">ℹ️</span>
+          </div>
+          <div id="s_summarization" class="text-2xl font-bold text-blue-600">0.0000</div>
+          <!-- Tooltip -->
+          <div class="tooltip absolute bg-gray-800 text-white text-xs rounded py-2 px-3 bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 z-50 shadow-lg">
+            <div class="font-semibold mb-1">Summarization Quality</div>
+            <p>Measures faithfulness (alignment with source) and coverage (completeness). Higher score means better summary quality.</p>
+            <div class="text-gray-300 mt-1">Range: 0.0 - 1.0 (higher is better)</div>
+          </div>
+        </div>
+
+        <!-- Hallucination -->
+        <div class="p-3 bg-gray-50 rounded tooltip-trigger relative metric-card metric-card-red">
+          <div class="flex items-center justify-between gap-1 mb-1">
+            <span class="metric-name metric-name-red">🚨 Hallucination</span>
+            <span class="text-gray-400 cursor-help text-xs">ℹ️</span>
+          </div>
+          <div id="s_hallucination" class="text-2xl font-bold text-red-600">0.0000</div>
+          <!-- Tooltip -->
+          <div class="tooltip absolute bg-gray-800 text-white text-xs rounded py-2 px-3 bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 z-50 shadow-lg">
+            <div class="font-semibold mb-1">Hallucination Detection</div>
+            <p>Checks if the summary contains factual information not present in the source document. Higher score means less hallucination.</p>
+            <div class="text-gray-300 mt-1">Range: 0.0 - 1.0 (higher is better)</div>
+          </div>
+        </div>
+
+        <!-- Bias -->
+        <div class="p-3 bg-gray-50 rounded tooltip-trigger relative metric-card metric-card-purple">
+          <div class="flex items-center justify-between gap-1 mb-1">
+            <span class="metric-name metric-name-purple">⚖️ Bias</span>
+            <span class="text-gray-400 cursor-help text-xs">ℹ️</span>
+          </div>
+          <div id="s_bias" class="text-2xl font-bold text-purple-600">0.0000</div>
+          <!-- Tooltip -->
+          <div class="tooltip absolute bg-gray-800 text-white text-xs rounded py-2 px-3 bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 z-50 shadow-lg">
+            <div class="font-semibold mb-1">Bias Detection</div>
+            <p>Evaluates the summary for gender, political, racial, or other biases. Higher score means less bias detected.</p>
+            <div class="text-gray-300 mt-1">Range: 0.0 - 1.0 (higher is better)</div>
+          </div>
+        </div>
+
+        <!-- Toxicity -->
+        <div class="p-3 bg-gray-50 rounded tooltip-trigger relative metric-card metric-card-yellow">
+          <div class="flex items-center justify-between gap-1 mb-1">
+            <span class="metric-name metric-name-yellow">☣️ Toxicity</span>
+            <span class="text-gray-400 cursor-help text-xs">ℹ️</span>
+          </div>
+          <div id="s_toxicity" class="text-2xl font-bold text-yellow-600">0.0000</div>
+          <!-- Tooltip -->
+          <div class="tooltip absolute bg-gray-800 text-white text-xs rounded py-2 px-3 bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 z-50 shadow-lg">
+            <div class="font-semibold mb-1">Toxicity Detection</div>
+            <p>Checks for toxic, offensive, or harmful language in the summary. Higher score means less toxic content.</p>
+            <div class="text-gray-300 mt-1">Range: 0.0 - 1.0 (higher is better)</div>
+          </div>
+        </div>
+
+        <!-- Readability -->
+        <div class="p-3 bg-gray-50 rounded tooltip-trigger relative metric-card metric-card-green">
+          <div class="flex items-center justify-between gap-1 mb-1">
+            <span class="metric-name metric-name-green">📖 Readability</span>
+            <span class="text-gray-400 cursor-help text-xs">ℹ️</span>
+          </div>
+          <div id="s_readability" class="text-2xl font-bold text-green-600">0.0000</div>
+          <!-- Tooltip -->
+          <div class="tooltip absolute bg-gray-800 text-white text-xs rounded py-2 px-3 bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 z-50 shadow-lg">
+            <div class="font-semibold mb-1">Readability</div>
+            <p>Evaluates how clear, coherent, and easy to understand the summary is for a non-expert reader. Uses GEval custom metric.</p>
+            <div class="text-gray-300 mt-1">Range: 0.0 - 1.0 (higher is better)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
 </body>
 </html>
