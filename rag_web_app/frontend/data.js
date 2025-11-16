@@ -43,7 +43,6 @@ async function onGenerateGroundTruth() {
     toggleBtn("generateBtn", true, "Generating...");
     setStatus(status, "Uploading file and generating ground truth using DeepEval...", "info");
     
-    // ✅ Create FormData with file upload
     const formData = new FormData();
     formData.append("file", file);
     formData.append("num_questions", numQuestions?.value || "5");
@@ -58,7 +57,7 @@ async function onGenerateGroundTruth() {
     
     const resp = await fetch(`${API_BASE}/generate_ground_truth`, {
       method: "POST",
-      body: formData, // ✅ Send as FormData, not JSON
+      body: formData,
     });
     
     if (!resp.ok) {
@@ -80,7 +79,6 @@ async function onGenerateGroundTruth() {
       throw new Error(data.message || "Generation failed");
     }
     
-    // ✅ Extract ground_truth_data
     generatedData = data.ground_truth_data || data.data || [];
     
     console.log("✅ Generated Data:", generatedData);
@@ -91,10 +89,8 @@ async function onGenerateGroundTruth() {
       throw new Error("No ground truth data returned from server");
     }
     
-    // Display preview
     displayPreview(generatedData);
     
-    // Enable export button
     if (exportBtn) exportBtn.disabled = false;
     
     setStatus(
@@ -103,7 +99,6 @@ async function onGenerateGroundTruth() {
       "success"
     );
     
-    // Update stats
     updateStats();
     
   } catch (err) {
@@ -126,15 +121,19 @@ async function onGenerateGroundTruth() {
   }
 }
 
-// Replace any old preview renderer that used inline styles
 function displayPreview(data) {
   const preview = $("dataPreview");
-  if (!preview) return;
+  if (!preview) {
+    console.warn("⚠️ dataPreview element not found");
+    return;
+  }
 
   if (!Array.isArray(data) || data.length === 0) {
     preview.innerHTML = `<div class="gt-empty">No data to display</div>`;
     return;
   }
+
+  console.log(`📊 Displaying ${data.length} samples`);
 
   const html = `
     <div class="gt-preview">
@@ -180,6 +179,8 @@ function displayPreview(data) {
   `;
 
   preview.innerHTML = html;
+  
+  console.log("✅ Preview rendered successfully");
 }
 
 function onExportData() {
@@ -216,7 +217,7 @@ function updateStats() {
   console.log("📊 Updating stats...");
   console.log("   Generated questions:", generatedData?.length || 0);
   
-  if (statDocs) statDocs.textContent = "1"; // Current uploaded file
+  if (statDocs) statDocs.textContent = "1";
   if (statQuestions) statQuestions.textContent = generatedData?.length || "0";
   if (statAvg) {
     const avg = generatedData?.length || 0;

@@ -305,17 +305,35 @@ async function onSummarize() {
     
     const data = await resp.json();
     console.log("📥 Summary response:", data);
-    
+
     const summary = data.summary || data.text || data.result || "No summary returned.";
     appendMessage("Assistant", `📝 Summary:\n\n${summary}`);
-    
-    if (data.metrics) {
-      console.log("📊 Updating summary metrics:", data.metrics);
-      updateSummaryMetrics(data.metrics);
+
+    // FIX: pick correct metrics object
+    const summaryMetricsObj =
+      data.summarization_metrics ||                // preferred key
+      data.metrics?.summarization_metrics ||       // nested variant
+      data.metrics ||                              // legacy structure
+      null;
+
+    console.log("🔎 Extracted summarization metrics:", summaryMetricsObj);
+
+    if (summaryMetricsObj) {
+      updateSummaryMetrics(summaryMetricsObj);
       const panel = $("summarizationMetricsPanel");
       if (panel) panel.style.display = "block";
+    } else {
+      console.warn("⚠ No summarization metrics found in response.");
     }
-    
+
+    if (data.metrics) {
+      // Keep DeepEval style metrics separate
+      updateDeepEvalMetrics(data.metrics);
+    }
+    if (data.fallback_metrics) {
+      updateFallbackMetrics(data.fallback_metrics);
+    }
+
     console.log("✅ Summary generated successfully");
   } catch (err) {
     console.error("❌ Summarize error:", err);
@@ -414,7 +432,9 @@ function updateFallbackMetrics(m) {
 }
 
 function updateSummaryMetrics(m) {
-  setNum("s_summarization", m.quality ?? m.score ?? m.summarization);
+  // Added explicit logging for debugging
+  console.log("🧮 Updating summary metrics with object:", m);
+  setNum("s_summarization", m.summarization ?? m.quality ?? m.score);
   setNum("s_hallucination", m.hallucination);
   setNum("s_bias", m.bias);
   setNum("s_toxicity", m.toxicity);

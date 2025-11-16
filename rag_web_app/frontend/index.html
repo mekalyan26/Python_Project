@@ -198,7 +198,7 @@
 
   <div class="w-full px-4 mt-8 max-w-7xl mx-auto">
     <!-- Main grid with chat and metrics -->
-    <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
+    <div class="grid grid-cols-1 lg:grid-cols-5 gap-4 mb-6">
       <!-- Chat Section (Left) - Takes 2 columns -->
       <div class="lg:col-span-2 bg-white rounded-2xl shadow-lg p-6">
         <h1 class="text-2xl font-bold mb-4 text-center">📄RAG Chatbot</h1>
@@ -331,6 +331,87 @@
         </div>
       </div>
 
+      <!-- Summarization Metrics Panel (New middle column) - ALWAYS VISIBLE -->
+      <div id="summarizationMetricsPanel" class="bg-white rounded-2xl shadow-lg p-6">
+        <h2 class="text-lg font-bold mb-4 text-orange-600">📝 Summarization Metrics</h2>
+        <div class="space-y-3">
+          <!-- Summarization Score -->
+          <div class="p-3 bg-gray-50 rounded tooltip-trigger relative metric-card metric-card-blue">
+            <div class="flex items-center justify-between gap-1 mb-1">
+              <span class="metric-name metric-name-blue">📊 Summarization</span>
+              <span class="text-gray-400 cursor-help text-xs">ℹ️</span>
+            </div>
+            <div id="s_summarization" class="text-2xl font-bold text-blue-600">0.0000</div>
+            <!-- Tooltip -->
+            <div class="tooltip absolute bg-gray-800 text-white text-xs rounded py-2 px-3 bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 z-50 shadow-lg">
+              <div class="font-semibold mb-1">Summarization Quality</div>
+              <p>Measures faithfulness (alignment with source) and coverage (completeness). Higher score means better summary quality.</p>
+              <div class="text-gray-300 mt-1">Range: 0.0 - 1.0 (higher is better)</div>
+            </div>
+          </div>
+
+          <!-- Hallucination -->
+          <div class="p-3 bg-gray-50 rounded tooltip-trigger relative metric-card metric-card-red">
+            <div class="flex items-center justify-between gap-1 mb-1">
+              <span class="metric-name metric-name-red">🚨 Hallucination</span>
+              <span class="text-gray-400 cursor-help text-xs">ℹ️</span>
+            </div>
+            <div id="s_hallucination" class="text-2xl font-bold text-red-600">0.0000</div>
+            <!-- Tooltip -->
+            <div class="tooltip absolute bg-gray-800 text-white text-xs rounded py-2 px-3 bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 z-50 shadow-lg">
+              <div class="font-semibold mb-1">Hallucination Detection</div>
+              <p>Checks if the summary contains factual information not present in the source document. Higher score means less hallucination.</p>
+              <div class="text-gray-300 mt-1">Range: 0.0 - 1.0 (higher is better)</div>
+            </div>
+          </div>
+
+          <!-- Bias -->
+          <div class="p-3 bg-gray-50 rounded tooltip-trigger relative metric-card metric-card-purple">
+            <div class="flex items-center justify-between gap-1 mb-1">
+              <span class="metric-name metric-name-purple">⚖️ Bias</span>
+              <span class="text-gray-400 cursor-help text-xs">ℹ️</span>
+            </div>
+            <div id="s_bias" class="text-2xl font-bold text-purple-600">0.0000</div>
+            <!-- Tooltip -->
+            <div class="tooltip absolute bg-gray-800 text-white text-xs rounded py-2 px-3 bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 z-50 shadow-lg">
+              <div class="font-semibold mb-1">Bias Detection</div>
+              <p>Evaluates the summary for gender, political, racial, or other biases. Higher score means less bias detected.</p>
+              <div class="text-gray-300 mt-1">Range: 0.0 - 1.0 (higher is better)</div>
+            </div>
+          </div>
+
+          <!-- Toxicity -->
+          <div class="p-3 bg-gray-50 rounded tooltip-trigger relative metric-card metric-card-yellow">
+            <div class="flex items-center justify-between gap-1 mb-1">
+              <span class="metric-name metric-name-yellow">☣️ Toxicity</span>
+              <span class="text-gray-400 cursor-help text-xs">ℹ️</span>
+            </div>
+            <div id="s_toxicity" class="text-2xl font-bold text-yellow-600">0.0000</div>
+            <!-- Tooltip -->
+            <div class="tooltip absolute bg-gray-800 text-white text-xs rounded py-2 px-3 bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 z-50 shadow-lg">
+              <div class="font-semibold mb-1">Toxicity Detection</div>
+              <p>Checks for toxic, offensive, or harmful language in the summary. Higher score means less toxic content.</p>
+              <div class="text-gray-300 mt-1">Range: 0.0 - 1.0 (higher is better)</div>
+            </div>
+          </div>
+
+          <!-- Readability -->
+          <div class="p-3 bg-gray-50 rounded tooltip-trigger relative metric-card metric-card-green">
+            <div class="flex items-center justify-between gap-1 mb-1">
+              <span class="metric-name metric-name-green">📖 Readability</span>
+              <span class="text-gray-400 cursor-help text-xs">ℹ️</span>
+            </div>
+            <div id="s_readability" class="text-2xl font-bold text-green-600">0.0000</div>
+            <!-- Tooltip -->
+            <div class="tooltip absolute bg-gray-800 text-white text-xs rounded py-2 px-3 bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 z-50 shadow-lg">
+              <div class="font-semibold mb-1">Readability</div>
+              <p>Evaluates how clear, coherent, and easy to understand the summary is for a non-expert reader. Uses GEval custom metric.</p>
+              <div class="text-gray-300 mt-1">Range: 0.0 - 1.0 (higher is better)</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Fallback Metrics Panel (Right column) -->
       <div id="metricsPanel" class="bg-white rounded-2xl shadow-lg p-6">
         <h2 class="text-lg font-bold mb-4 text-blue-600">📊 Fallback Metrics</h2>
@@ -358,87 +439,6 @@
           <div class="p-3 bg-gray-50 rounded metric-card metric-card-red">
             <div class="metric-name metric-name-red mb-1">⭐ RAGAS</div>
             <div id="m_ragas" class="text-2xl font-bold text-red-600">0.0000</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Summarization Metrics Panel (Full width below) -->
-    <div id="summarizationMetricsPanel" class="bg-white rounded-2xl shadow-lg p-6 mb-6" style="display: none;">
-      <h2 class="text-lg font-bold mb-4 text-orange-600">📝 Summarization Metrics</h2>
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
-        <!-- Summarization Score -->
-        <div class="p-3 bg-gray-50 rounded tooltip-trigger relative metric-card metric-card-blue">
-          <div class="flex items-center justify-between gap-1 mb-1">
-            <span class="metric-name metric-name-blue">📊 Summarization</span>
-            <span class="text-gray-400 cursor-help text-xs">ℹ️</span>
-          </div>
-          <div id="s_summarization" class="text-2xl font-bold text-blue-600">0.0000</div>
-          <!-- Tooltip -->
-          <div class="tooltip absolute bg-gray-800 text-white text-xs rounded py-2 px-3 bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 z-50 shadow-lg">
-            <div class="font-semibold mb-1">Summarization Quality</div>
-            <p>Measures faithfulness (alignment with source) and coverage (completeness). Higher score means better summary quality.</p>
-            <div class="text-gray-300 mt-1">Range: 0.0 - 1.0 (higher is better)</div>
-          </div>
-        </div>
-
-        <!-- Hallucination -->
-        <div class="p-3 bg-gray-50 rounded tooltip-trigger relative metric-card metric-card-red">
-          <div class="flex items-center justify-between gap-1 mb-1">
-            <span class="metric-name metric-name-red">🚨 Hallucination</span>
-            <span class="text-gray-400 cursor-help text-xs">ℹ️</span>
-          </div>
-          <div id="s_hallucination" class="text-2xl font-bold text-red-600">0.0000</div>
-          <!-- Tooltip -->
-          <div class="tooltip absolute bg-gray-800 text-white text-xs rounded py-2 px-3 bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 z-50 shadow-lg">
-            <div class="font-semibold mb-1">Hallucination Detection</div>
-            <p>Checks if the summary contains factual information not present in the source document. Higher score means less hallucination.</p>
-            <div class="text-gray-300 mt-1">Range: 0.0 - 1.0 (higher is better)</div>
-          </div>
-        </div>
-
-        <!-- Bias -->
-        <div class="p-3 bg-gray-50 rounded tooltip-trigger relative metric-card metric-card-purple">
-          <div class="flex items-center justify-between gap-1 mb-1">
-            <span class="metric-name metric-name-purple">⚖️ Bias</span>
-            <span class="text-gray-400 cursor-help text-xs">ℹ️</span>
-          </div>
-          <div id="s_bias" class="text-2xl font-bold text-purple-600">0.0000</div>
-          <!-- Tooltip -->
-          <div class="tooltip absolute bg-gray-800 text-white text-xs rounded py-2 px-3 bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 z-50 shadow-lg">
-            <div class="font-semibold mb-1">Bias Detection</div>
-            <p>Evaluates the summary for gender, political, racial, or other biases. Higher score means less bias detected.</p>
-            <div class="text-gray-300 mt-1">Range: 0.0 - 1.0 (higher is better)</div>
-          </div>
-        </div>
-
-        <!-- Toxicity -->
-        <div class="p-3 bg-gray-50 rounded tooltip-trigger relative metric-card metric-card-yellow">
-          <div class="flex items-center justify-between gap-1 mb-1">
-            <span class="metric-name metric-name-yellow">☣️ Toxicity</span>
-            <span class="text-gray-400 cursor-help text-xs">ℹ️</span>
-          </div>
-          <div id="s_toxicity" class="text-2xl font-bold text-yellow-600">0.0000</div>
-          <!-- Tooltip -->
-          <div class="tooltip absolute bg-gray-800 text-white text-xs rounded py-2 px-3 bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 z-50 shadow-lg">
-            <div class="font-semibold mb-1">Toxicity Detection</div>
-            <p>Checks for toxic, offensive, or harmful language in the summary. Higher score means less toxic content.</p>
-            <div class="text-gray-300 mt-1">Range: 0.0 - 1.0 (higher is better)</div>
-          </div>
-        </div>
-
-        <!-- Readability -->
-        <div class="p-3 bg-gray-50 rounded tooltip-trigger relative metric-card metric-card-green">
-          <div class="flex items-center justify-between gap-1 mb-1">
-            <span class="metric-name metric-name-green">📖 Readability</span>
-            <span class="text-gray-400 cursor-help text-xs">ℹ️</span>
-          </div>
-          <div id="s_readability" class="text-2xl font-bold text-green-600">0.0000</div>
-          <!-- Tooltip -->
-          <div class="tooltip absolute bg-gray-800 text-white text-xs rounded py-2 px-3 bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 z-50 shadow-lg">
-            <div class="font-semibold mb-1">Readability</div>
-            <p>Evaluates how clear, coherent, and easy to understand the summary is for a non-expert reader. Uses GEval custom metric.</p>
-            <div class="text-gray-300 mt-1">Range: 0.0 - 1.0 (higher is better)</div>
           </div>
         </div>
       </div>
