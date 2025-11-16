@@ -105,88 +105,69 @@ async function onUploadAndIndex() {
 /* --- Ask --- */
 async function onAsk() {
   const questionInput = $("questionInput");
-  if (!questionInput) return;
+  const referenceInput = $("referenceInput");
   
-  const question = questionInput.value?.trim();
+  const question = questionInput?.value?.trim();
   if (!question) {
-    toast("Please enter a question.", "error");
+    alert("Please enter a question.");
     return;
   }
   
-  if (!state.indexed && !state.docId) {
-    toast("Please upload and index a PDF first.", "error");
-    return;
-  }
-
+  appendMessage("You", question);
+  questionInput.value = "";
+  
   try {
-    toggleBtn("askBtn", true, "Asking…");
-    appendMessage("You", question);
-    console.log(`❓ Asking: ${question}`);
-
-    const reference_answer = await getReferenceAnswer();
-    
     const payload = {
-      question: question,
-      doc_id: state.docId || null,
-      top_k: 5,
-      k: 5,
-      num_results: 5,
-      reference_answer: reference_answer || null,
-      expected_answer: reference_answer || null,
-      ground_truth: reference_answer || null,
-      evaluate: !!reference_answer,
-      use_reranker: false,
-      stream: false,
-      temperature: 0.7,
-      max_tokens: 500,
+      question,
+      reference_answer: referenceInput?.value?.trim() || null,
+      top_k: 4,
+      max_new_tokens: 512
     };
-
-    console.log("📤 Request payload:", payload);
-
+    
+    console.log("📤 Sending ask request:", payload);
+    
     const resp = await fetch(`${API_BASE}/ask`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-
+    
     if (!resp.ok) {
       const errorText = await resp.text();
-      let errorMsg;
-      try {
-        const errorJson = JSON.parse(errorText);
-        errorMsg = errorJson.detail || errorJson.message || errorText;
-      } catch {
-        errorMsg = errorText;
-      }
-      throw new Error(`Ask failed: ${errorMsg}`);
+      throw new Error(`Server error: ${errorText}`);
     }
     
     const data = await resp.json();
     console.log("📥 Ask response:", data);
-
-    const answer = data.answer || data.response || data.result || "No answer returned.";
+    
+    if (!data.ok) {
+      throw new Error(data.message || "Request failed");
+    }
+    
+    const answer = data.answer || "No answer returned.";
     appendMessage("Assistant", answer);
     
-    if (Array.isArray(data.sources) && data.sources.length) {
-      appendMessage("Sources", data.sources.map(s => s.title || s.id || s).join("; "));
-    }
-
-    if (data.metrics) {
-      console.log("📊 Updating DeepEval metrics:", data.metrics);
-      updateDeepEvalMetrics(data.metrics);
-    }
-    if (data.fallback_metrics) {
-      console.log("📊 Updating fallback metrics:", data.fallback_metrics);
-      updateFallbackMetrics(data.fallback_metrics);
+    // Update DeepEval metrics
+    if (data.deepeval_metrics) {
+      console.log("🔵 Updating DeepEval metrics:", data.deepeval_metrics);
+      updateDeepEvalMetrics(data.deepeval_metrics);
     }
     
-    console.log("✅ Question answered successfully");
+    // Update Fallback metrics
+    if (data.fallback_eval_metrics) {
+      console.log("🟢 Updating Fallback metrics:", data.fallback_eval_metrics);
+      updateFallbackMetrics(data.fallback_eval_metrics);
+    }
+    
+    // Legacy metrics (if any)
+    if (data.metrics) {
+      console.log("⚪ Legacy metrics:", data.metrics);
+      // Optionally update a third panel or ignore
+    }
+    
   } catch (err) {
     console.error("❌ Ask error:", err);
     appendMessage("System", `Error: ${err.message}`);
-    toast(err.message, "error");
-  } finally {
-    toggleBtn("askBtn", false);
   }
 }
 
@@ -415,6 +396,7 @@ async function getReferenceAnswer() {
 
 /* --- Metrics Updaters --- */
 function updateDeepEvalMetrics(m) {
+  console.log("🔵 DeepEval metrics received:", m);
   setNum("d_answer_relevancy", m.answer_relevancy ?? m.answerRelevancy ?? m.answer_relevance);
   setNum("d_faithfulness", m.faithfulness);
   setNum("d_contextual_recall", m.contextual_recall ?? m.contextualRecall ?? m.context_recall);
@@ -423,6 +405,7 @@ function updateDeepEvalMetrics(m) {
 }
 
 function updateFallbackMetrics(m) {
+  console.log("🟢 Fallback metrics received:", m);
   setNum("m_answer_relevancy", m.answer_relevancy ?? m.answerRelevancy ?? m.answer_relevance);
   setNum("m_faithfulness", m.faithfulness);
   setNum("m_contextual_recall", m.contextual_recall ?? m.contextualRecall ?? m.context_recall);
@@ -432,8 +415,7 @@ function updateFallbackMetrics(m) {
 }
 
 function updateSummaryMetrics(m) {
-  // Added explicit logging for debugging
-  console.log("🧮 Updating summary metrics with object:", m);
+  console.log("🧮 Summary metrics received:", m);
   setNum("s_summarization", m.summarization ?? m.quality ?? m.score);
   setNum("s_hallucination", m.hallucination);
   setNum("s_bias", m.bias);
@@ -441,12 +423,23 @@ function updateSummaryMetrics(m) {
   setNum("s_readability", m.readability);
 }
 
-function setNum(id, v) {
+function setNum(id, val) {
   const el = $(id);
-  if (!el) return;
-  const n = Number(v);
-  if (!Number.isFinite(n)) return;
-  el.textContent = n.toFixed(4);
+  if (!el) {
+    console.warn(`⚠️ Element not found: ${id}`);
+    return;
+  }
+  
+  let display = "N/A";
+  if (val !== undefined && val !== null) {
+    const num = parseFloat(val);
+    if (!isNaN(num)) {
+      display = num.toFixed(4);
+    }
+  }
+  
+  el.textContent = display;
+  console.log(`✓ Updated ${id} = ${display}`);
 }
 
 console.log("✅ app.js loaded successfully");

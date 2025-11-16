@@ -131,6 +131,8 @@ def simple_extractive_summary(text: str, max_sentences: int = 5) -> str:
 class AskRequest(BaseModel):
     question: str
     reference_answer: Optional[str] = None
+    top_k: Optional[int] = 4  # Add this
+    max_new_tokens: Optional[int] = 512  # Add this
 
 class GroundTruthRequest(BaseModel):
     doc_id: str
@@ -178,8 +180,8 @@ def ask(req: AskRequest):
         result = rag.answer(
             req.question,
             reference_answer=req.reference_answer,
-            top_k=req.top_k or 4,
-            max_new_tokens=req.max_new_tokens or 512,
+            top_k=req.top_k,  # Now uses the attribute from the model
+            max_new_tokens=req.max_new_tokens,  # Now uses the attribute from the model
         )
 
         deepeval_metrics = {}
