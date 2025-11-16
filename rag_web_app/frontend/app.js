@@ -1,269 +1,432 @@
 const API_BASE = "http://localhost:8000";
 
-//Kalyan
-const uploadBtn = document.getElementById("uploadBtn");
-const pdfFile = document.getElementById("pdfFile");
-const uploadStatus = document.getElementById("uploadStatus");
+let state = {
+  docId: null,
+  indexed: false,
+  uploading: false,
+};
 
-const askBtn = document.getElementById("askBtn");
-const questionInput = document.getElementById("questionInput");
-const referenceInput = document.getElementById("referenceInput");
-const chatBox = document.getElementById("chatBox");
+const $ = (id) => document.getElementById(id);
 
-const summarizeBtn = document.getElementById("summarizeBtn");
-
-// Reference file elements
-const referenceFile = document.getElementById("referenceFile");
-const referenceFileName = document.getElementById("referenceFileName");
-
-function addMessage(sender, text) {
-  const bubble = document.createElement("div");
-  const classes = ["p-2", "my-2", "rounded-lg", "max-w-[80%]"];
-  if (sender === "user") classes.push("bg-blue-500", "text-white", "self-end", "ml-auto");
-  else classes.push("bg-gray-200", "text-gray-800");
-  classes.forEach(c => bubble.classList.add(c));
-  bubble.innerText = text;
-  chatBox.appendChild(bubble);
-  chatBox.scrollTop = chatBox.scrollHeight;
-}
-
-function showMetrics(metrics) {
-  console.log("showMetrics (fallback) called with:", metrics);
-  const set = (id, v) => {
-    const el = document.getElementById(id);
-    if (!el) {
-      console.warn("Missing metric element:", id);
-      return;
-    }
-    const value = (typeof v === "number") ? v.toFixed(4) : (v ?? "0.0000");
-    el.textContent = value;
-    console.log(`  Set ${id} = ${value}`);
-  };
-
-  const m = metrics || {};
-  console.log("Fallback metrics object:", m);
-  set("m_answer_relevancy", m.answer_relevancy ?? m.relevancy ?? 0.0);
-  set("m_faithfulness", m.faithfulness ?? 0.0);
-  set("m_contextual_recall", m.contextual_recall ?? m.recall ?? 0.0);
-  set("m_contextual_precision", m.contextual_precision ?? m.precision ?? 0.0);
-  set("m_contextual_relevancy", m.contextual_relevancy ?? 0.0);
-  set("m_ragas", m.ragas ?? m.ragas_score ?? 0.0);
-
-  const panel = document.getElementById("metricsPanel");
-  if (panel) {
-    panel.style.display = "block";
-    console.log("✓ Fallback metrics panel displayed");
-  }
-}
-
-function showDeepEvalMetrics(deepevalMetrics) {
-  console.log("===== showDeepEvalMetrics called =====");
-  console.log("Raw deepevalMetrics object:", deepevalMetrics);
-  console.log("Type:", typeof deepevalMetrics);
-  console.log("Is empty object?", Object.keys(deepevalMetrics || {}).length === 0);
-
-  if (!deepevalMetrics || Object.keys(deepevalMetrics).length === 0) {
-    console.warn("⚠️ No DeepEval metrics received - using empty defaults");
-  }
-
-  const set = (id, v) => {
-    const el = document.getElementById(id);
-    if (!el) {
-      console.error(`❌ Missing DeepEval metric element: ${id}`);
-      return;
-    }
-    const value = (typeof v === "number") ? v.toFixed(4) : (v ?? "0.0000");
-    el.textContent = value;
-    console.log(`  ✓ Set ${id} = ${value}`);
-  };
-
-  const d = deepevalMetrics || {};
-  console.log("DeepEval metrics keys:", Object.keys(d));
-  
-  set("d_answer_relevancy", d.answer_relevancy ?? d.answer_relevancy_score ?? 0.0);
-  set("d_faithfulness", d.faithfulness ?? d.faithfulness_score ?? 0.0);
-  set("d_contextual_recall", d.contextual_recall ?? d.contextual_recall_score ?? 0.0);
-  set("d_contextual_precision", d.contextual_precision ?? d.contextual_precision_score ?? 0.0);
-  set("d_ragas", d.ragas ?? d.ragas_score ?? 0.0);
-
-  const panel = document.getElementById("deepevalMetricsPanel");
-  if (panel) {
-    panel.style.display = "block";
-    console.log("✓ DeepEval metrics panel displayed");
-  } else {
-    console.error("❌ deepevalMetricsPanel not found in DOM");
-  }
-  console.log("===== showDeepEvalMetrics complete =====\n");
-}
-
-function showSummarizationMetrics(s) {
-  const set = (id, v) => {
-    const el = document.getElementById(id);
-    if (el) el.textContent = (typeof v === "number") ? v.toFixed(4) : (v ?? "0.0000");
-  };
-  if (!s || Object.keys(s).length === 0) {
-    const panel = document.getElementById("summarizationMetricsPanel");
-    if (panel) panel.style.display = "none";
-    return;
-  }
-  set("s_summarization", s.summarization ?? 0.0);
-  set("s_hallucination", s.hallucination ?? 0.0);
-  set("s_bias", s.bias ?? 0.0);
-  set("s_toxicity", s.toxicity ?? 0.0);
-  set("s_readability", s.readability ?? 0.0);
-  const panel = document.getElementById("summarizationMetricsPanel");
-  if (panel) panel.style.display = "block";
-}
-
-function showWaitingSpinner() {
-  if (document.getElementById("awaitSpinner")) return;
-  const wrapper = document.createElement("div");
-  wrapper.id = "awaitSpinner";
-  wrapper.className = "waiting-bubble";
-  const spinner = document.createElement("div");
-  spinner.className = "spinner";
-  for (let i = 0; i < 12; i++) {
-    const blade = document.createElement("div");
-    blade.className = "spinner-blade";
-    spinner.appendChild(blade);
-  }
-  wrapper.appendChild(spinner);
-  chatBox.appendChild(wrapper);
-  chatBox.scrollTop = chatBox.scrollHeight;
-}
-
-function removeWaitingSpinner() {
-  const el = document.getElementById("awaitSpinner");
-  if (el) el.remove();
-}
-
-uploadBtn?.addEventListener("click", async () => {
-  const file = pdfFile?.files?.[0];
-  if (!file) {
-    uploadStatus.textContent = "Please select a PDF file.";
-    return;
-  }
-  uploadStatus.textContent = "Uploading and indexing...";
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("chunk_size", "900");
-  formData.append("chunk_overlap", "200");
-  try {
-    const res = await fetch(`${API_BASE}/upload`, { method: "POST", body: formData });
-    const data = await res.json();
-    uploadStatus.textContent = data.message || "Upload completed.";
-  } catch (err) {
-    console.error("Upload failed:", err);
-    uploadStatus.textContent = "Upload failed: " + err.message;
-  }
+document.addEventListener("DOMContentLoaded", () => {
+  console.log("🚀 RAG App initialized");
+  bindEvents();
+  if ($("askBtn")) $("askBtn").disabled = true;
 });
 
-askBtn?.addEventListener("click", async () => {
-  const question = questionInput.value.trim();
-  const reference = referenceInput?.value.trim() || null;
-  if (!question) return;
+function bindEvents() {
+  const uploadBtn = $("uploadBtn");
+  const askBtn = $("askBtn");
+  const summarizeBtn = $("summarizeBtn");
+  const refFile = $("referenceFile");
   
-  console.log("\n========== ASK REQUEST ==========");
-  console.log("Question:", question);
-  console.log("Reference answer provided:", !!reference);
+  if (uploadBtn) {
+    uploadBtn.addEventListener("click", onUploadAndIndex);
+  }
   
-  addMessage("user", question);
-  questionInput.value = "";
+  if (askBtn) {
+    askBtn.addEventListener("click", onAsk);
+  }
+  
+  if (summarizeBtn) {
+    summarizeBtn.addEventListener("click", onSummarize);
+  }
+  
+  if (refFile) {
+    refFile.addEventListener("change", (e) => {
+      const name = e.target?.files?.[0]?.name || "";
+      const label = $("referenceFileName");
+      if (label) label.textContent = name || "Choose .txt / .md / .json";
+    });
+  }
+}
+
+/* --- Upload + Index --- */
+async function onUploadAndIndex() {
+  if (state.uploading) return;
+  
+  const status = $("uploadStatus");
+  const fileInput = $("pdfFile");
+  
+  if (!fileInput?.files?.length) {
+    setStatus(status, "Please choose a PDF file.", "error");
+    return;
+  }
+
+  const file = fileInput.files[0];
+  if (!file.name.toLowerCase().endsWith(".pdf")) {
+    setStatus(status, "Only PDF files are supported.", "error");
+    return;
+  }
 
   try {
-    showWaitingSpinner();
+    state.uploading = true;
+    toggleBtn("uploadBtn", true, "Uploading…");
+    setStatus(status, "Uploading PDF…", "info");
 
-    const payload = { question };
-    if (reference) payload.reference_answer = reference;
+    const form = new FormData();
+    form.append("file", file);
 
-    const res = await fetch(`${API_BASE}/ask`, {
+    const uploadResp = await fetch(`${API_BASE}/upload`, {
+      method: "POST",
+      body: form,
+    });
+
+    if (!uploadResp.ok) {
+      const errorText = await uploadResp.text();
+      throw new Error(`Upload failed: ${errorText}`);
+    }
+
+    const uploadJson = await uploadResp.json();
+    console.log("📥 Upload response:", uploadJson);
+
+    state.docId = uploadJson.doc_id || 
+                  uploadJson.document_id || 
+                  uploadJson.index_id || 
+                  uploadJson.id || 
+                  uploadJson.file_id ||
+                  null;
+
+    state.indexed = true;
+    const askBtn = $("askBtn");
+    if (askBtn) askBtn.disabled = false;
+    
+    setStatus(status, uploadJson.message || "✓ Upload and indexing complete.", "success");
+    console.log("✅ Document indexed successfully");
+  } catch (err) {
+    console.error("❌ Upload/Index error:", err);
+    setStatus(status, `Error: ${err.message}`, "error");
+  } finally {
+    state.uploading = false;
+    toggleBtn("uploadBtn", false);
+  }
+}
+
+/* --- Ask --- */
+async function onAsk() {
+  const questionInput = $("questionInput");
+  if (!questionInput) return;
+  
+  const question = questionInput.value?.trim();
+  if (!question) {
+    toast("Please enter a question.", "error");
+    return;
+  }
+  
+  if (!state.indexed && !state.docId) {
+    toast("Please upload and index a PDF first.", "error");
+    return;
+  }
+
+  try {
+    toggleBtn("askBtn", true, "Asking…");
+    appendMessage("You", question);
+    console.log(`❓ Asking: ${question}`);
+
+    const reference_answer = await getReferenceAnswer();
+    
+    const payload = {
+      question: question,
+      doc_id: state.docId || null,
+      top_k: 5,
+      k: 5,
+      num_results: 5,
+      reference_answer: reference_answer || null,
+      expected_answer: reference_answer || null,
+      ground_truth: reference_answer || null,
+      evaluate: !!reference_answer,
+      use_reranker: false,
+      stream: false,
+      temperature: 0.7,
+      max_tokens: 500,
+    };
+
+    console.log("📤 Request payload:", payload);
+
+    const resp = await fetch(`${API_BASE}/ask`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
 
-    removeWaitingSpinner();
+    if (!resp.ok) {
+      const errorText = await resp.text();
+      let errorMsg;
+      try {
+        const errorJson = JSON.parse(errorText);
+        errorMsg = errorJson.detail || errorJson.message || errorText;
+      } catch {
+        errorMsg = errorText;
+      }
+      throw new Error(`Ask failed: ${errorMsg}`);
+    }
+    
+    const data = await resp.json();
+    console.log("📥 Ask response:", data);
 
-    const data = await res.json();
-    console.log("\n========== /ask RESPONSE ==========");
-    console.log("Full response:", data);
-    console.log("response.metrics:", data.metrics);
-    console.log("response.deepeval_metrics:", data.deepeval_metrics);
-    console.log("response.fallback_eval_metrics:", data.fallback_eval_metrics);
-
-    if (!res.ok) {
-      addMessage("bot", `⚠️ ${data?.message || res.statusText}`);
-      console.error("Response error:", res.status, data.message);
-      showMetrics({});
-      showDeepEvalMetrics({});
-      return;
+    const answer = data.answer || data.response || data.result || "No answer returned.";
+    appendMessage("Assistant", answer);
+    
+    if (Array.isArray(data.sources) && data.sources.length) {
+      appendMessage("Sources", data.sources.map(s => s.title || s.id || s).join("; "));
     }
 
-    addMessage("bot", data.answer ?? JSON.stringify(data));
+    if (data.metrics) {
+      console.log("📊 Updating DeepEval metrics:", data.metrics);
+      updateDeepEvalMetrics(data.metrics);
+    }
+    if (data.fallback_metrics) {
+      console.log("📊 Updating fallback metrics:", data.fallback_metrics);
+      updateFallbackMetrics(data.fallback_metrics);
+    }
     
-    // Show fallback metrics from RAG pipeline
-    console.log("\n--- Displaying Fallback Metrics (from RAG pipeline) ---");
-    showMetrics(data.metrics ?? {});
-    
-    // Show DeepEval metrics (prioritize fallback_eval_metrics, then deepeval_metrics)
-    console.log("\n--- Displaying DeepEval Metrics ---");
-    const deepevalToShow = data.deepeval_metrics || data.fallback_eval_metrics || {};
-    console.log("DeepEval metrics to display:", deepevalToShow);
-    showDeepEvalMetrics(deepevalToShow);
-    
-    console.log("========== ASK REQUEST COMPLETE ==========\n");
+    console.log("✅ Question answered successfully");
   } catch (err) {
-    removeWaitingSpinner();
-    console.error("Request error:", err);
-    addMessage("bot", `❌ Request failed: ${err.message}`);
+    console.error("❌ Ask error:", err);
+    appendMessage("System", `Error: ${err.message}`);
+    toast(err.message, "error");
+  } finally {
+    toggleBtn("askBtn", false);
   }
-});
+}
 
-summarizeBtn?.addEventListener("click", async () => {
+/* --- Summarize with GET/POST fallback --- */
+async function onSummarize() {
+  if (!state.indexed && !state.docId) {
+    toast("Please upload and index a PDF first.", "error");
+    return;
+  }
+  
   try {
-    showWaitingSpinner();
-    const res = await fetch(`${API_BASE}/summarize`);
-    const data = await res.json();
-    removeWaitingSpinner();
+    toggleBtn("summarizeBtn", true, "Summarizing…");
+    console.log("📝 Requesting summary...");
+    
+    let resp;
+    let success = false;
+    
+    // Try POST first (most common for REST APIs)
+    try {
+      console.log("🔍 Trying POST /summarize");
+      const payload = {
+        doc_id: state.docId || null,
+        document_id: state.docId || null,
+        max_length: 500,
+        min_length: 100,
+      };
 
-    if (!res.ok || !data.ok) {
-      addMessage("bot", `⚠️ ${data?.message || res.statusText}`);
-      showSummarizationMetrics({});
-      return;
+      resp = await fetch(`${API_BASE}/summarize`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (resp.ok) {
+        success = true;
+        console.log("✅ POST /summarize succeeded");
+      } else {
+        console.warn(`⚠ POST /summarize failed: ${resp.status}`);
+      }
+    } catch (e) {
+      console.warn("⚠ POST /summarize error:", e.message);
     }
 
-    addMessage("bot", data.summary || "No summary returned");
-    showSummarizationMetrics(data.summarization_metrics || {});
-  } catch (err) {
-    removeWaitingSpinner();
-    addMessage("bot", `❌ Error: ${err.message}`);
-  }
-});
+    // If POST failed, try GET with query params
+    if (!success) {
+      try {
+        console.log("🔍 Trying GET /summarize with query params");
+        const params = new URLSearchParams({
+          doc_id: state.docId || "",
+          max_length: "500",
+          min_length: "100",
+        });
 
-// Apply retro styles to existing controls at runtime
-document.addEventListener("DOMContentLoaded", () => {
-  document.querySelectorAll("button").forEach(b => b.classList.add("retro-btn"));
-  document.getElementById("askBtn")?.classList.add("retro-btn--accent");
-  document.getElementById("uploadBtn")?.classList.add("retro-btn");
-  document.getElementById("summarizeBtn")?.classList.add("retro-btn");
+        resp = await fetch(`${API_BASE}/summarize?${params}`, {
+          method: "GET",
+        });
 
-  document.querySelectorAll('input[type="text"], input[type="search"]').forEach(i => i.classList.add("retro-input"));
-});
-
-// Reference file -> auto-fill referenceInput
-referenceFile?.addEventListener("change", async (e) => {
-  const file = e.target.files?.[0];
-  if (!file) return;
-  referenceFileName.textContent = file.name;
-
-  try {
-    const text = await file.text();
-    if (referenceInput) {
-      // Limit to avoid huge payloads
-      referenceInput.value = text.slice(0, 8000);
+        if (resp.ok) {
+          success = true;
+          console.log("✅ GET /summarize succeeded");
+        } else {
+          console.warn(`⚠ GET /summarize failed: ${resp.status}`);
+        }
+      } catch (e) {
+        console.warn("⚠ GET /summarize error:", e.message);
+      }
     }
-    console.log("Loaded reference file:", { name: file.name, size: file.size });
+
+    // Try alternative endpoints
+    if (!success) {
+      const alternatives = [
+        { path: "/summary", method: "POST" },
+        { path: "/api/summarize", method: "POST" },
+        { path: "/documents/summarize", method: "POST" },
+        { path: `/summarize/${state.docId}`, method: "GET" },
+      ];
+
+      for (const alt of alternatives) {
+        try {
+          console.log(`🔍 Trying ${alt.method} ${alt.path}`);
+          
+          if (alt.method === "POST") {
+            resp = await fetch(`${API_BASE}${alt.path}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ doc_id: state.docId }),
+            });
+          } else {
+            resp = await fetch(`${API_BASE}${alt.path}`, {
+              method: "GET",
+            });
+          }
+
+          if (resp.ok) {
+            success = true;
+            console.log(`✅ ${alt.method} ${alt.path} succeeded`);
+            break;
+          }
+        } catch (e) {
+          console.warn(`⚠ ${alt.method} ${alt.path} error:`, e.message);
+        }
+      }
+    }
+
+    if (!success) {
+      throw new Error(
+        "Summarize endpoint not found or not configured correctly.\n\n" +
+        "Tried:\n" +
+        "  • POST /summarize\n" +
+        "  • GET /summarize?doc_id=...\n" +
+        "  • POST /summary\n" +
+        "  • POST /api/summarize\n\n" +
+        "Please check your backend's /docs for the correct endpoint."
+      );
+    }
+    
+    const data = await resp.json();
+    console.log("📥 Summary response:", data);
+    
+    const summary = data.summary || data.text || data.result || "No summary returned.";
+    appendMessage("Assistant", `📝 Summary:\n\n${summary}`);
+    
+    if (data.metrics) {
+      console.log("📊 Updating summary metrics:", data.metrics);
+      updateSummaryMetrics(data.metrics);
+      const panel = $("summarizationMetricsPanel");
+      if (panel) panel.style.display = "block";
+    }
+    
+    console.log("✅ Summary generated successfully");
   } catch (err) {
-    console.error("Failed to read reference file:", err);
+    console.error("❌ Summarize error:", err);
+    appendMessage("System", `❌ ${err.message}`);
+    toast(err.message, "error");
+  } finally {
+    toggleBtn("summarizeBtn", false);
   }
-});
+}
+
+/* --- UI Helpers --- */
+function appendMessage(author, text) {
+  const chat = $("chatBox");
+  if (!chat) return;
+  
+  const who = document.createElement("div");
+  who.style.fontWeight = "600";
+  who.style.fontSize = "14px";
+  who.style.color = author === "You" ? "#374151" : author === "System" ? "#dc2626" : "#2563eb";
+  who.style.marginBottom = "4px";
+  who.textContent = author;
+  
+  const msg = document.createElement("div");
+  msg.style.marginBottom = "12px";
+  msg.style.fontSize = "15px";
+  msg.style.whiteSpace = "pre-wrap";
+  msg.textContent = text;
+  
+  chat.appendChild(who);
+  chat.appendChild(msg);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function toggleBtn(id, loading, labelWhenLoading = "Please wait…") {
+  const btn = $(id);
+  if (!btn) return;
+  
+  btn.disabled = !!loading;
+  if (loading) {
+    btn.dataset._label = btn.textContent;
+    btn.textContent = labelWhenLoading;
+  } else if (btn.dataset._label) {
+    btn.textContent = btn.dataset._label;
+    delete btn.dataset._label;
+  }
+}
+
+function setStatus(el, msg, type = "info") {
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = type === "success" ? "#065f46" : type === "error" ? "#991b1b" : "#1e40af";
+}
+
+function toast(msg, type = "info") {
+  const s = $("uploadStatus");
+  if (s) {
+    setStatus(s, msg, type);
+  } else {
+    console.warn("⚠ uploadStatus element not found");
+  }
+}
+
+async function getReferenceAnswer() {
+  const inline = $("referenceInput")?.value?.trim();
+  const fileInput = $("referenceFile");
+  
+  if (fileInput?.files?.length) {
+    try {
+      const file = fileInput.files[0];
+      const text = await file.text();
+      return text?.trim() || inline || "";
+    } catch (e) {
+      console.warn("Could not read reference file:", e);
+      return inline || "";
+    }
+  }
+  return inline || "";
+}
+
+/* --- Metrics Updaters --- */
+function updateDeepEvalMetrics(m) {
+  setNum("d_answer_relevancy", m.answer_relevancy ?? m.answerRelevancy ?? m.answer_relevance);
+  setNum("d_faithfulness", m.faithfulness);
+  setNum("d_contextual_recall", m.contextual_recall ?? m.contextualRecall ?? m.context_recall);
+  setNum("d_contextual_precision", m.contextual_precision ?? m.contextualPrecision ?? m.context_precision);
+  setNum("d_ragas", m.ragas ?? m.ragas_score);
+}
+
+function updateFallbackMetrics(m) {
+  setNum("m_answer_relevancy", m.answer_relevancy ?? m.answerRelevancy ?? m.answer_relevance);
+  setNum("m_faithfulness", m.faithfulness);
+  setNum("m_contextual_recall", m.contextual_recall ?? m.contextualRecall ?? m.context_recall);
+  setNum("m_contextual_precision", m.contextual_precision ?? m.contextualPrecision ?? m.context_precision);
+  setNum("m_contextual_relevancy", m.contextual_relevancy ?? m.contextualRelevancy ?? m.context_relevancy);
+  setNum("m_ragas", m.ragas ?? m.ragas_score);
+}
+
+function updateSummaryMetrics(m) {
+  setNum("s_summarization", m.quality ?? m.score ?? m.summarization);
+  setNum("s_hallucination", m.hallucination);
+  setNum("s_bias", m.bias);
+  setNum("s_toxicity", m.toxicity);
+  setNum("s_readability", m.readability);
+}
+
+function setNum(id, v) {
+  const el = $(id);
+  if (!el) return;
+  const n = Number(v);
+  if (!Number.isFinite(n)) return;
+  el.textContent = n.toFixed(4);
+}
+
+console.log("✅ app.js loaded successfully");

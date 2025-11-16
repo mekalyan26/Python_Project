@@ -1,8 +1,11 @@
-import os
 import json
-import logging
+import os
 import re
-from typing import List, Dict, Optional
+import logging  # Add this import
+from datetime import datetime
+from typing import List, Optional, Dict
+from deepeval.dataset import Golden, EvaluationDataset
+from deepeval.synthesizer import Synthesizer
 
 # try to reuse your project's pdf utilities if present
 try:
@@ -170,3 +173,113 @@ def generate_ground_truth_from_pdf(
         raise
 
     return out_path
+
+
+async def generate_ground_truth(
+    doc_id: str,
+    num_questions: int = 5,
+    question_type: str = "mixed",
+    custom_prompt: Optional[str] = None
+) -> dict:
+    """
+    Generate ground truth Q&A pairs using DeepEval Synthesizer or fallback
+    
+    Args:
+        doc_id: Document identifier (can be path or ID)
+        num_questions: Number of Q&A pairs to generate
+        question_type: Type of questions (factual, analytical, mixed)
+        custom_prompt: Optional custom prompt for generation
+    
+    Returns:
+        dict with ground_truth_data, count, file_path
+    """
+    try:
+        logger.info(f"📝 Generating {num_questions} ground truth samples for doc: {doc_id}")
+        
+        # Try to find the PDF file
+        # First check if doc_id is a direct path
+        pdf_path = None
+        
+        if os.path.isfile(doc_id):
+            pdf_path = doc_id
+        else:
+            # Check in uploads directory
+            uploads_dir = "uploads"
+            if os.path.isdir(uploads_dir):
+                # Try exact match
+                potential_path = os.path.join(uploads_dir, doc_id)
+                if os.path.isfile(potential_path):
+                    pdf_path = potential_path
+                else:
+                    # Try adding .pdf extension
+                    potential_path = os.path.join(uploads_dir, f"{doc_id}.pdf")
+                    if os.path.isfile(potential_path):
+                        pdf_path = potential_path
+                    else:
+                        # Search for any PDF with doc_id in name
+                        for filename in os.listdir(uploads_dir):
+                            if doc_id in filename and filename.endswith('.pdf'):
+                                pdf_path = os.path.join(uploads_dir, filename)
+                                break
+        
+        if not pdf_path or not os.path.isfile(pdf_path):
+            raise FileNotFoundError(f"Could not find PDF for doc_id: {doc_id}")
+        
+        logger.info(f"Found PDF at: {pdf_path}")
+        
+        # Extract text from PDF
+        text = _read_pdf_text(pdf_path)
+        if not text:
+            raise RuntimeError("No text could be extracted from PDF")
+        
+        logger.info(f"Extracted {len(text)} characters from PDF")
+        
+        # Try DeepEval first
+        goldens_list = None
+        if question_type != "simple":  # Allow forcing simple mode
+            goldens_list = _deepeval_synthesizer(text, num_questions=num_questions)
+        
+        # Fallback to simple synthesizer
+        if not goldens_list:
+            logger.info("Using fallback simple synthesizer")
+            goldens_list = _simple_synthesizer(text, max_q=num_questions)
+        
+        if not goldens_list:
+            raise RuntimeError("Failed to generate any ground truth samples")
+        
+        # Limit to requested number
+        goldens_list = goldens_list[:num_questions]
+        
+        # Convert to standard format
+        goldens_data = []
+        for item in goldens_list:
+            goldens_data.append({
+                "input": item.get("question", ""),
+                "expected_output": item.get("answer", ""),
+                "actual_output": item.get("answer", ""),  # Same as expected initially
+                "context": [item.get("fact", "")],
+                "retrieval_context": [item.get("fact", "")],
+            })
+        
+        # Save to JSON file
+        output_dir = "data/ground_truth"
+        os.makedirs(output_dir, exist_ok=True)
+        
+        timestamp = int(datetime.now().timestamp())
+        output_file = os.path.join(output_dir, f"ground_truth_{timestamp}.json")
+        
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(goldens_data, f, indent=2, ensure_ascii=False)
+        
+        logger.info(f"✅ Generated {len(goldens_data)} samples, saved to {output_file}")
+        
+        return {
+            "ground_truth_data": goldens_data,
+            "count": len(goldens_data),
+            "file_path": output_file,
+            "doc_id": doc_id
+        }
+        
+    except Exception as e:
+        logger.exception("Ground truth generation failed")
+        raise Exception(f"Ground truth generation failed: {str(e)}")

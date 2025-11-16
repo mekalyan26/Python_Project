@@ -502,7 +502,81 @@ button:active, .btn:active {
   color: #ea580c;
 }
 
-/* Orange gradient for summarization title */
-.metric-name-orange {
-  background-image: linear-gradient(135deg, #f97316, #ea580c);
+/* ===============================================
+   Global styles
+   =============================================== */
+
+/* ===============================================
+   Page: Data (frontend/data.html)
+   =============================================== */
+.page-data {
+  /* Page background */
+  background-image: url('my-data-background.png'); /* adjust path if in assets/ */
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-attachment: fixed;
 }
+
+/* Light overlay to improve readability on bg image */
+.bg-overlay {
+  background: rgba(255, 255, 255, 0.85);
+  min-height: 100vh;
+}
+
+/* Preview panel defaults (optional, complements Tailwind) */
+#dataPreview {
+  /* height/scroll are kept via Tailwind classes;
+     add overrides here if needed across pages */
+}
+/* ===============================================
+   End: Page: Data
+   =============================================== */
+
+/* ===============================================
+   Page: Data — Ground-truth preview cards
+   =============================================== */
+.gt-preview { padding: 1rem; }
+
+.gt-card {
+  margin-bottom: 1rem;
+  padding: 1rem;
+  background: var(--retro-card);
+  border: 3px solid var(--retro-ink);
+  border-radius: 10px;
+  box-shadow: 6px 6px 0 var(--retro-shadow);
+}
+
+.gt-title {
+  font-weight: 700;
+  color: var(--retro-primary);
+  margin-bottom: 8px;
+  font-family: "Press Start 2P", system-ui;
+  font-size: 12px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.gt-field { margin-bottom: 8px; }
+.gt-label { color: var(--retro-ink); font-weight: 700; }
+.gt-value { margin-left: 12px; margin-top: 4px; }
+.gt-value-expected { color: #059669; }
+.gt-value-actual { color: #6b7280; }
+
+.gt-context {
+  margin-left: 12px;
+  margin-top: 4px;
+  font-size: 13px;
+  color: #6b7280;
+  font-style: italic;
+  white-space: pre-wrap;
+}
+
+.gt-empty {
+  padding: 2rem;
+  text-align: center;
+  color: #6b7280;
+}
+/* ===============================================
+   End: Data — Ground-truth preview cards
+   =============================================== */

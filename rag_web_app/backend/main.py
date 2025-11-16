@@ -1,11 +1,12 @@
 import os, re, heapq, logging
 from typing import List, Optional
 from dotenv import load_dotenv
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
 import shutil
+import json
 
 # Load environment variables from .env file
 load_dotenv()  # This loads .env file from current directory
@@ -130,6 +131,12 @@ def simple_extractive_summary(text: str, max_sentences: int = 5) -> str:
 class AskRequest(BaseModel):
     question: str
     reference_answer: Optional[str] = None
+
+class GroundTruthRequest(BaseModel):
+    doc_id: str
+    num_questions: int = 5
+    question_type: str = "mixed"  # factual, analytical, mixed
+    custom_prompt: Optional[str] = None
 
 # Health check
 @app.get("/health")
@@ -273,51 +280,116 @@ def summarize():
         logger.exception("Summarize failed")
         return {"ok": False, "message": str(e)}
 
-# Generate groundtruth endpoint
-@app.post("/generate_groundtruth")
-async def generate_groundtruth(file: UploadFile = File(...), split_into_qa: str = Form("0")):
-    """Endpoint to generate groundtruth data from uploaded file."""
-    logger.info(f"Received groundtruth generation request for: {file.filename}")
+# Generate groundtruth endpoint - UPDATED to handle file uploads
+@app.post("/generate_ground_truth")
+async def generate_ground_truth_endpoint(
+    file: Optional[UploadFile] = File(None),
+    doc_id: Optional[str] = Form(None),
+    num_questions: int = Form(5),
+    question_type: str = Form("mixed"),
+    custom_prompt: Optional[str] = Form(None)
+):
+    """
+    Generate ground truth Q&A pairs using DeepEval.
+    Accepts either a file upload OR a doc_id.
+    """
     try:
-        # Create uploads directory
-        upload_dir = os.path.join(os.getcwd(), "uploads")
-        os.makedirs(upload_dir, exist_ok=True)
-
-        # Save uploaded file
-        file_path = os.path.join(upload_dir, file.filename)
-        logger.debug(f"Saving file to: {file_path}")
+        import tempfile
+        from ground_truth_data_generation import generate_ground_truth
         
-        with open(file_path, "wb") as out_f:
-            content = await file.read()
-            out_f.write(content)
-        logger.info(f"✓ File saved: {file_path}")
-
-        # Generate groundtruth
-        logger.info("Starting groundtruth generation...")
-        out_json = generate_ground_truth_from_pdf(file_path, num_questions=50, use_deepeval=True)
-        logger.info(f"✓ Groundtruth generated: {out_json}")
-
-        # Read and return preview
-        with open(out_json, "r", encoding="utf-8") as fh:
-            data = json.load(fh)
+        # Determine the PDF path
+        pdf_path = None
+        temp_file = None
         
-        preview = data[:10]
-        logger.info(f"✓ Returning preview with {len(preview)} items")
-
-        return JSONResponse({
+        if file:
+            # Handle file upload
+            logger.info(f"📝 Generating ground truth from uploaded file: {file.filename}")
+            raw = await file.read()
+            
+            # Save to temp file
+            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+            temp_file.write(raw)
+            temp_file.close()
+            pdf_path = temp_file.name
+            
+        elif doc_id:
+            # Handle doc_id reference
+            logger.info(f"📝 Generating ground truth for doc_id: {doc_id}")
+            
+            # Check in uploads directory
+            uploads_dir = "uploads"
+            if os.path.isfile(doc_id):
+                pdf_path = doc_id
+            elif os.path.isdir(uploads_dir):
+                # Try exact match
+                potential_path = os.path.join(uploads_dir, doc_id)
+                if os.path.isfile(potential_path):
+                    pdf_path = potential_path
+                else:
+                    # Try adding .pdf extension
+                    potential_path = os.path.join(uploads_dir, f"{doc_id}.pdf")
+                    if os.path.isfile(potential_path):
+                        pdf_path = potential_path
+                    else:
+                        # Search for any PDF with doc_id in name
+                        for filename in os.listdir(uploads_dir):
+                            if doc_id in filename and filename.endswith('.pdf'):
+                                pdf_path = os.path.join(uploads_dir, filename)
+                                break
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Either 'file' or 'doc_id' must be provided"
+            )
+        
+        if not pdf_path or not os.path.isfile(pdf_path):
+            raise HTTPException(
+                status_code=404,
+                detail=f"Could not find PDF for doc_id: {doc_id if doc_id else 'uploaded file'}"
+            )
+        
+        logger.info(f"✓ Using PDF: {pdf_path}")
+        logger.info(f"   Questions: {num_questions}, Type: {question_type}")
+        
+        # Generate ground truth data
+        result = await generate_ground_truth(
+            doc_id=pdf_path,
+            num_questions=num_questions,
+            question_type=question_type,
+            custom_prompt=custom_prompt
+        )
+        
+        # Clean up temp file if created
+        if temp_file:
+            try:
+                os.unlink(temp_file.name)
+            except Exception:
+                pass
+        
+        return {
             "ok": True,
-            "message": "Groundtruth generated successfully",
-            "golden_file": out_json,
-            "preview": preview,
-            "total_count": len(data)
-        })
-
+            "message": f"Successfully generated {result['count']} ground truth samples",
+            "ground_truth_data": result['ground_truth_data'],
+            "count": result['count'],
+            "file_path": result.get('file_path'),
+            "doc_id": doc_id or file.filename if file else "unknown"
+        }
+        
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.exception("Groundtruth generation failed")
-        return JSONResponse({
-            "ok": False,
-            "message": f"Error: {str(e)}"
-        }, status_code=500)
+        logger.exception("Ground truth generation failed")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Ground truth generation failed: {str(e)}"
+        )
+
+# Add an alias without underscore to avoid 404 from old frontend calls
+app.add_api_route(
+    "/generate_groundtruth",
+    generate_ground_truth_endpoint,
+    methods=["POST"],
+)
 
 # Download groundtruth endpoint
 @app.get("/download_groundtruth")
